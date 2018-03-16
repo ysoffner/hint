@@ -270,28 +270,80 @@ const prettyPrintArray = (a: string[]): string => {
     return [a.slice(0, -1).join(', '), a.slice(-1)[0]].join(a.length < 2 ? '' : ', and ');
 };
 
-const prettyPrintCommit = (commit: Commit): string => {
+const getCommitAuthorInfo = async (commitSHA: string) => {
+    const res = await promisify(request)({
+        headers: {
+            Authorization: `token ${GITHUB.token}`,
+            'User-Agent': 'Nellie The Narwhal'
+        },
+        method: 'GET',
+        url: `https://api.github.com/repos/${REPOSITORY_SLUG}/commits/${commitSHA}`
+    });
+
+    if (res.statusCode === 200) {
+        try {
+            const response = JSON.parse(res.body);
+
+            return {
+                gitHubProfileURL: response.author.html_url,
+                name: response.commit.author.name
+            };
+        } catch (e) {
+            // Ignore as it's not important.
+        }
+    }
+
+    return '';
+};
+
+const prettyPrintCommit = async (commit: Commit): Promise<string> => {
+
+    let additionalInfo = false;
+    let commitAuthorInfo = '';
+    let issuesInfo = '';
     let result = `* [[\`${commit.sha.substring(0, 10)}\`](${REPOSITORY_URL}/commit/${commit.sha})] - ${commit.title}`;
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    // Get commit author information.
+
+    const commitAuthor = await getCommitAuthorInfo(commit.sha);
+
+    if (commitAuthorInfo) {
+        commitAuthorInfo = `by [\\\`${(commitAuthor as any).name}\\\`](${(commitAuthor as any).gitHubProfileURL})`;
+        additionalInfo = true;
+    }
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    // Get related issues information.
 
     const issues = commit.associatedIssues.map((issue) => {
         return `[\`#${issue}\`](${REPOSITORY_URL}/issues/${issue})`;
     });
 
     if (issues.length > 0) {
-        result = `${result} (see also: ${prettyPrintArray(issues)})`;
+        issuesInfo = `see also: ${prettyPrintArray(issues)}`;
+        additionalInfo = true;
+    }
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    if (additionalInfo) {
+        result = `${result} (${commitAuthorInfo}${commitAuthorInfo && issuesInfo ? ' / ': ''}${issuesInfo})`;
     }
 
     return `${result}.`;
 };
 
-const generateChangelogSection = (title: string, tags: Array<string>, commits: Array<Commit>): string => {
+const generateChangelogSection = async (title: string, tags: Array<string>, commits: Array<Commit>): Promise<string> => { // eslint-disable-line require-await
     let result = '';
 
-    commits.forEach((commit) => {
+    for (const commit of commits) {
         if (tags.includes(commit.tag)) {
-            result += `${prettyPrintCommit(commit)}\n`;
+            result += `${await prettyPrintCommit(commit)}\n`;
         }
-    });
+    };
 
     if (result !== '') {
         result = `## ${title}\n\n${result}`;
@@ -324,7 +376,7 @@ const getChangelogContent = (ctx) => {
     return `# ${ctx.newPackageVersion} (${getDate()})\n\n${ctx.packageReleaseNotes}\n`;
 };
 
-const getChangelogData = (commits: Array<Commit>): ChangelogData => {
+const getChangelogData = async (commits: Array<Commit>): Promise<ChangelogData> => {
 
     /*
      * Note: Commits that use tags that do not denote user-facing
@@ -332,9 +384,9 @@ const getChangelogData = (commits: Array<Commit>): ChangelogData => {
      * release notes.
      */
 
-    const breakingChanges = generateChangelogSection('Breaking Changes', ['Breaking'], commits);
-    const bugFixesAndImprovements = generateChangelogSection('Bug fixes / Improvements', ['Docs', 'Fix'], commits);
-    const newFeatures = generateChangelogSection('New features', ['New', 'Update'], commits);
+    const breakingChanges = await generateChangelogSection('Breaking Changes', ['Breaking'], commits);
+    const bugFixesAndImprovements = await generateChangelogSection('Bug fixes / Improvements', ['Docs', 'Fix'], commits);
+    const newFeatures = await generateChangelogSection('New features', ['New', 'Update'], commits);
 
     let releaseNotes = '';
 
@@ -391,11 +443,11 @@ const getVersionNumber = (ctx) => {
     ctx.newPackageVersion = ctx.packageJSONFileContent.version;
 };
 
-const getReleaseData = (ctx) => {
+const getReleaseData = async (ctx) => {
     ({
         semverIncrement: ctx.packageSemverIncrement,
         releaseNotes: ctx.packageReleaseNotes
-    } = getChangelogData(ctx.commitSHAsSinceLastRelease));
+    } = await getChangelogData(ctx.commitSHAsSinceLastRelease));
 
     if (!ctx.isPrerelease && !ctx.packageReleaseNotes) {
         ctx.skipRemainingTasks = true;
@@ -580,31 +632,25 @@ const updatePackageVersionNumberInOtherPackages = (ctx) => {
 
         const packageJSONFilePath = `${pkg}/package.json`;
         const packageJSONFileContent = require(`../../${packageJSONFilePath}`);
-
         const dependencyName = ctx.packageName === 'sonarwhal' ? ctx.packageName : `@sonarwhal/${ctx.packageName}`;
 
-        const dependencyRange = packageJSONFileContent.dependencies && packageJSONFileContent.dependencies[dependencyName];
-        const devDependencyRange = packageJSONFileContent.devDependencies && packageJSONFileContent.devDependencies[dependencyName];
-        const peerDependencyRange = packageJSONFileContent.peerDependencies && packageJSONFileContent.peerDependencies[dependencyName];
-        const optionalDependencyRange = packageJSONFileContent.optionalDependencies && packageJSONFileContent.optionalDependencies[dependencyName];
+        let packageJSONFileHasBeenUpdated = false;
 
-        if (dependencyRange) {
-            packageJSONFileContent.dependencies[dependencyName] = `^${ctx.newPackageVersion}`;
-        }
+        [
+            'dependencies',
+            'devDependencie',
+            'optionalDependencies',
+            'peerDependencies'
+        ].forEach((dependencyType) => {
+            const dependencyRange = packageJSONFileContent[dependencyType] && packageJSONFileContent[dependencyType][dependencyName];
 
-        if (devDependencyRange) {
-            packageJSONFileContent.devDependencies[dependencyName] = `^${ctx.newPackageVersion}`;
-        }
+            if (dependencyRange) {
+                packageJSONFileContent[dependencyType][dependencyName] = `^${ctx.newPackageVersion}`;
+                packageJSONFileHasBeenUpdated = true;
+            }
+        });
 
-        if (peerDependencyRange) {
-            packageJSONFileContent.peerDependencies[dependencyName] = `^${ctx.newPackageVersion}`;
-        }
-
-        if (optionalDependencyRange) {
-            packageJSONFileContent.optionalDependencyRange[dependencyName] = `^${ctx.newPackageVersion}`;
-        }
-
-        if (dependencyRange || devDependencyRange || peerDependencyRange) {
+        if (packageJSONFileHasBeenUpdated) {
             updateFile(`${packageJSONFilePath}`, `${JSON.stringify(packageJSONFileContent, null, 2)}\n`);
         }
     }
@@ -664,35 +710,35 @@ const getTasksForRelease = (packageName: string, packageJSONFileContent) => {
 
     // Common tasks for both published and unpublished packages.
 
-    tasks.push(newTask('Install dependencies.', npmInstall));
-
-    // `configurations` don't have tests or build step.
-
-    if (!packageName.startsWith('configuration-')) {
-        tasks.push(
-            newTask('Run tests.', npmRunTests),
-            newTask('Run release build.', npmRunBuildForRelease),
-        );
-    }
-
-    tasks.push(
-        newTask('Commit changes.', gitCommitBuildChanges),
-        newTask('Tag new version.', gitTagNewVersion),
-        newTask('Remove `devDependencies`.', npmRemoveDevDependencies),
-        newTask('Create `npm-shrinkwrap.json` file.', npmShrinkwrap),
-        newTask(`Publish on npm.`, npmPublish),
-        newTask(`Push changes upstream.`, gitPush),
-        newTask(`Create release.`, gitCreateRelease),
-
-        /*
-         * To keep things in sync, after a package is released,
-         * update all other packages to use its newly released version.
-         */
-
-        newTask(`Update \`${packageName}\` version numbers in other packages.`, updatePackageVersionNumberInOtherPackages),
-        newTask(`Commit updated \`${packageName}\` version numbers.`, commitUpdatedPackageVersionNumberInOtherPackages),
-        newTask(`Push changes upstream.`, gitPush)
-    );
+    // tasks.push(newTask('Install dependencies.', npmInstall));
+    //
+    // // `configurations` don't have tests or build step.
+    //
+    // if (!packageName.startsWith('configuration-')) {
+    //     tasks.push(
+    //         newTask('Run tests.', npmRunTests),
+    //         newTask('Run release build.', npmRunBuildForRelease),
+    //     );
+    // }
+    //
+    // tasks.push(
+    //     newTask('Commit changes.', gitCommitBuildChanges),
+    //     newTask('Tag new version.', gitTagNewVersion),
+    //     newTask('Remove `devDependencies`.', npmRemoveDevDependencies),
+    //     newTask('Create `npm-shrinkwrap.json` file.', npmShrinkwrap),
+    //     newTask(`Publish on npm.`, npmPublish),
+    //     newTask(`Push changes upstream.`, gitPush),
+    //     newTask(`Create release.`, gitCreateRelease),
+    //
+    //     #<{(|
+    //      * To keep things in sync, after a package is released,
+    //      * update all other packages to use its newly released version.
+    //      |)}>#
+    //
+    //     newTask(`Update \`${packageName}\` version numbers in other packages.`, updatePackageVersionNumberInOtherPackages),
+    //     newTask(`Commit updated \`${packageName}\` version numbers.`, commitUpdatedPackageVersionNumberInOtherPackages),
+    //     newTask(`Push changes upstream.`, gitPush)
+    // );
 
     return tasks;
 };
@@ -781,7 +827,7 @@ const main = async () => {
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    await gitFetchTags();
+    // await gitFetchTags();
 
     /*
      * For prereleases the release logs are not published,
