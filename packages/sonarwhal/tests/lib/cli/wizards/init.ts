@@ -6,7 +6,7 @@ import test from 'ava';
 import { NpmPackage } from '../../../../src/lib/types';
 
 const inquirer = { prompt() { } };
-const stubBrowserslistObject = { generateBrowserslistConfig() { } };
+const stubBrowserSupportObject = { generateBrowserslistConfig() { } };
 const resourceLoader = {
     getCoreResources() { },
     getInstalledResources() { }
@@ -38,7 +38,7 @@ proxyquire('../../../../src/lib/cli/wizards/init', {
     '../../utils/logging': logger,
     '../../utils/npm': npm,
     '../../utils/resource-loader': resourceLoader,
-    '../browserslist': stubBrowserslistObject,
+    '../browsersupport': stubBrowserSupportObject,
     child_process: child, // eslint-disable-line camelcase
     fs,
     inquirer,
@@ -49,12 +49,12 @@ import initSonarwhalrc from '../../../../src/lib/cli/wizards/init';
 
 test.beforeEach((t) => {
     sinon.stub(promisifyObject, 'promisify').resolves();
-    sinon.stub(stubBrowserslistObject, 'generateBrowserslistConfig').resolves([]);
+    sinon.stub(stubBrowserSupportObject, 'generateBrowserslistConfig').resolves([]);
     sinon.spy(stubUtilObject, 'promisify');
 
     t.context.util = stubUtilObject.promisify;
     t.context.promisify = promisifyObject.promisify;
-    t.context.browserslistGenerator = stubBrowserslistObject.generateBrowserslistConfig;
+    t.context.browserslistGenerator = stubBrowserSupportObject.generateBrowserslistConfig;
 });
 
 test.afterEach.always((t) => {

@@ -47,7 +47,7 @@ const askUserToCreateConfig = async (): Promise<boolean> => {
         return false;
     }
 
-    const { default: initSonarwhalrc } = await import('./wizards/init');
+    const { default: initSonarwhalrc } = await import(/* webpackChunkName: init*/'./wizards/init');
 
     const sonarwhalrcCreated = await initSonarwhalrc();
 

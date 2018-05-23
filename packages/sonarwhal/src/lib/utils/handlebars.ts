@@ -1,14 +1,13 @@
-import * as path from 'path';
+import { join } from 'path'; //eslint-disable-line
 
 import * as Handlebars from 'handlebars';
 
 import { debug as d } from './debug';
-import { readFileAsync } from './misc';
-import { findPackageRoot } from './misc';
+import { getSonarwhalPackage, readFileAsync } from './misc';
 
 const debug = d(__filename);
 
-export const sonarwhalPackage = require(path.join(findPackageRoot(), 'package.json'));
+export const sonarwhalPackage = getSonarwhalPackage();
 
 /**
  * Searches the current version used for a package in `sonarwhal` and uses that version or the `defaultVersion`.

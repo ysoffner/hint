@@ -15,21 +15,19 @@
  * ------------------------------------------------------------------------------
  */
 
-import * as path from 'path';
-
 import chalk from 'chalk';
 import * as updateNotifier from 'update-notifier';
 
 import { CLIOptions } from './types';
 import * as logger from './utils/logging';
-import { loadJSONFile } from './utils/misc';
+import { getSonarwhalPackage } from './utils/misc';
 
 import { options } from './cli/options';
 import { cliActions } from './cli/actions';
 
 /** Notify user if the current version of sonarwhal is not up to date. */
 const notifyIfNeeded = () => {
-    const pkg = loadJSONFile(path.join(__dirname, '../../../package.json'));
+    const pkg = getSonarwhalPackage();
     /*
      * Fetch and persist comparison result in the background.
      * Check interval is set as one day by default.

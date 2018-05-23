@@ -164,7 +164,14 @@ const mkdirpAsync = promisify(mkdirp);
 /** Name of the package to use as a template. */
 const TEMPLATE_PATH = './templates/new-rule';
 const SHARED_TEMPLATE_PATH = './shared-templates';
-const partialEventCode = readFile(path.join(__dirname, 'templates', 'new-rule', 'partial-event-code.hbs'));
+
+let partialEventCode: string = '';
+
+if (process.env.webpack) { // eslint-disable-line no-process-env
+    partialEventCode = require('./templates/new-rule/partial-event-code.hbs');
+} else {
+    partialEventCode = readFile('./templates/new-rule/partial-event-code.hbs');
+}
 
 Handlebars.registerPartial('event-code', partialEventCode);
 Handlebars.registerHelper('toCamelCase', toCamelCase);

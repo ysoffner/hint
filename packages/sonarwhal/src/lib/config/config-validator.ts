@@ -9,8 +9,6 @@
  * ------------------------------------------------------------------------------
  */
 
-import * as path from 'path';
-
 import { readJSONSync } from 'fs-extra';
 
 import { validate } from '../utils/schema-validator';
@@ -19,7 +17,10 @@ import { UserConfig } from '../types';
 import * as logger from '../utils/logging';
 
 const debug = d(__filename);
-const schema = readJSONSync(path.join(__dirname, 'config-schema.json'));
+// Can't have a variable for the path because webpack complains otherwise
+const schema = process.env.webpack ? // eslint-disable-line no-process-env
+    require('./config-schema.json') :
+    readJSONSync('./config-schema.json');
 
 /*
  * ------------------------------------------------------------------------------

@@ -19,7 +19,7 @@ import { debug as d } from '../../utils/debug';
 import * as logger from '../../utils/logging';
 import { getInstalledResources, getCoreResources } from '../../utils/resource-loader';
 import { ResourceType } from '../../enums/resourcetype';
-import { generateBrowserslistConfig } from '../browserslist';
+import { generateBrowserslistConfig } from '../browsersupport';
 import { getOfficialPackages, installPackages } from '../../utils/npm';
 import { NpmPackage } from '../../types';
 
