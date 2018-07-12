@@ -17,6 +17,9 @@ export default (targetURL: string, responseHeaders: object): boolean => {
 
     try {
         mediaType = parseContentTypeHeader(contentTypeHeaderValue).type;
+        if(!contentTypeHeaderValue.includes('text/html') && mediaType === 'text/html'){
+            console.error(`WEIRD THING GOING ON!!!:\nCONTENT-TYPE: ${contentTypeHeaderValue}`);
+        }
     } catch (e) {
         return false;
     }
